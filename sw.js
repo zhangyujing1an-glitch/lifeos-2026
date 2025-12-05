@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lifeos-v8-final-clean';
+const CACHE_NAME = 'lifeos-v9-absolute-clean';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
