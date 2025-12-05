@@ -10,29 +10,30 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="[https://cdn-icons-png.flaticon.com/512/9320/9320297.png](https://cdn-icons-png.flaticon.com/512/9320/9320297.png)">
 
-    <!-- 1. 全局错误监控 (防止白屏) -->
+    <!-- 1. 全局错误监控 -->
     <script>
         window.onerror = function(msg, url, line, col, error) {
             var errorBox = document.getElementById('error-box');
+            var loading = document.getElementById('loading');
+            if (loading) loading.style.display = 'none';
             if (errorBox) {
                 errorBox.style.display = 'block';
-                errorBox.innerHTML += '错误: ' + msg + '<br>Line: ' + line + '<br>请截图此页面反馈。<br><br>';
+                errorBox.innerHTML += '<strong>错误:</strong> ' + msg + '<br>Line: ' + line + '<hr>';
             }
         };
-        // 2. 预定义全局变量 (防止脚本加载慢导致崩溃)
         window.tailwind = window.tailwind || { config: {} };
         window.lucide = window.lucide || {}; 
     </script>
 
-    <!-- 3. 核心库 (版本锁定) -->
-    <script src="[https://cdn.tailwindcss.com](https://cdn.tailwindcss.com)"></script>
-    <script src="[https://unpkg.com/react@18.2.0/umd/react.development.js](https://unpkg.com/react@18.2.0/umd/react.development.js)"></script>
-    <script src="[https://unpkg.com/react-dom@18.2.0/umd/react-dom.development.js](https://unpkg.com/react-dom@18.2.0/umd/react-dom.development.js)"></script>
-    <script src="[https://unpkg.com/@babel/standalone/babel.min.js](https://unpkg.com/@babel/standalone/babel.min.js)"></script>
+    <!-- 2. 核心库 (纯净链接) -->
+    <script src="[https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.js](https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.js)"></script>
+    <script src="[https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js](https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js)"></script>
+    <script src="[https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js](https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js)"></script>
+    <script src="[https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js](https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js)"></script>
     <script src="[https://unpkg.com/lucide-react@0.263.1/dist/umd/lucide-react.min.js](https://unpkg.com/lucide-react@0.263.1/dist/umd/lucide-react.min.js)"></script>
 
     <style>
-        body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; user-select: none; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; user-select: none; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #0f172a; }
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
@@ -40,33 +41,44 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
         
-        /* Loading 和 错误提示样式 */
-        #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f8fafc; display: flex; justify-content: center; align-items: center; z-index: 1000; transition: opacity 0.5s; }
-        #error-box { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #fff; color: red; z-index: 9999; padding: 20px; overflow: auto; font-family: monospace; font-size: 14px; }
+        #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f8fafc; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; transition: opacity 0.5s; }
+        #error-box { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #fff; color: red; z-index: 9999; padding: 20px; overflow: auto; font-family: monospace; font-size: 12px; word-break: break-all; }
+        .loader { width: 48px; height: 48px; border: 5px solid #4f46e5; border-bottom-color: transparent; border-radius: 50%; display: inline-block; box-sizing: border-box; animation: rotation 1s linear infinite; margin-bottom: 20px; }
+        @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-900">
-    <!-- 错误显示区域 -->
+<body>
     <div id="error-box"></div>
-    <!-- Loading 界面 -->
-    <div id="loading"><div class="text-slate-500 font-bold animate-pulse">LifeOS 启动中...</div></div>
+    <div id="loading">
+        <span class="loader"></span>
+        <div style="color: #64748b; font-size: 14px; font-weight: 500;">LifeOS 启动中...</div>
+        <div id="loading-tip" style="color: #94a3b8; font-size: 12px; margin-top: 10px;">正在初始化 (0/5)</div>
+    </div>
     
     <div id="root"></div>
 
+    <!-- 强制启动脚本 -->
+    <script>
+        setTimeout(function() {
+            var loading = document.getElementById('loading');
+            if(loading && loading.style.display !== 'none') {
+                document.getElementById('loading-tip').innerText = "加载较慢，正在尝试进入...";
+                setTimeout(function() { loading.style.display = 'none'; }, 1000);
+            }
+        }, 4000);
+    </script>
+
     <script type="text/babel">
-        // 移除 Loading
+        // React 启动后立即关闭 Loading
         setTimeout(() => {
             const loading = document.getElementById('loading');
-            if(loading) {
-                loading.style.opacity = '0';
-                setTimeout(() => loading.style.display = 'none', 500);
-            }
-        }, 800);
+            if(loading) loading.style.display = 'none';
+        }, 100);
 
         const { useState, useEffect, useMemo } = React;
-        
-        // 安全获取图标 (容错处理)
         const LucideIcons = window.lucide || {};
+        
+        // 解构图标
         const { 
             PieChart: PieChartIcon, Clock, Smartphone, Wallet, Plus, TrendingUp, 
             Calendar: CalendarIcon, CheckCircle2, MoreHorizontal, Layout, Zap, 
