@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>2026 LifeOS</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="[https://cdn-icons-png.flaticon.com/512/9320/9320297.png](https://cdn-icons-png.flaticon.com/512/9320/9320297.png)">
+
+    <!-- 1. 全局错误监控 (防止白屏) -->
+    <script>
+        window.onerror = function(msg, url, line, col, error) {
+            var errorBox = document.getElementById('error-box');
+            if (errorBox) {
+                errorBox.style.display = 'block';
+                errorBox.innerHTML += '错误: ' + msg + '<br>Line: ' + line + '<br>请截图此页面反馈。<br><br>';
+            }
+        };
+        // 2. 预定义全局变量 (防止脚本加载慢导致崩溃)
+        window.tailwind = window.tailwind || { config: {} };
+        window.lucide = window.lucide || {}; 
+    </script>
+
+    <!-- 3. 核心库 (版本锁定) -->
+    <script src="[https://cdn.tailwindcss.com](https://cdn.tailwindcss.com)"></script>
+    <script src="[https://unpkg.com/react@18.2.0/umd/react.development.js](https://unpkg.com/react@18.2.0/umd/react.development.js)"></script>
+    <script src="[https://unpkg.com/react-dom@18.2.0/umd/react-dom.development.js](https://unpkg.com/react-dom@18.2.0/umd/react-dom.development.js)"></script>
+    <script src="[https://unpkg.com/@babel/standalone/babel.min.js](https://unpkg.com/@babel/standalone/babel.min.js)"></script>
+    <script src="[https://unpkg.com/lucide-react@0.263.1/dist/umd/lucide-react.min.js](https://unpkg.com/lucide-react@0.263.1/dist/umd/lucide-react.min.js)"></script>
+
+    <style>
+        body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; user-select: none; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
+        .animate-fade-in { animation: fadeIn 0.5s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+        
+        /* Loading 和 错误提示样式 */
+        #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f8fafc; display: flex; justify-content: center; align-items: center; z-index: 1000; transition: opacity 0.5s; }
+        #error-box { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #fff; color: red; z-index: 9999; padding: 20px; overflow: auto; font-family: monospace; font-size: 14px; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+    <!-- 错误显示区域 -->
+    <div id="error-box"></div>
+    <!-- Loading 界面 -->
+    <div id="loading"><div class="text-slate-500 font-bold animate-pulse">LifeOS 启动中...</div></div>
+    
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // 移除 Loading
+        setTimeout(() => {
+            const loading = document.getElementById('loading');
+            if(loading) {
+                loading.style.opacity = '0';
+                setTimeout(() => loading.style.display = 'none', 500);
+            }
+        }, 800);
+
+        const { useState, useEffect, useMemo } = React;
+        
+        // 安全获取图标 (容错处理)
+        const LucideIcons = window.lucide || {};
+        const { 
+            PieChart: PieChartIcon, Clock, Smartphone, Wallet, Plus, TrendingUp, 
+            Calendar: CalendarIcon, CheckCircle2, MoreHorizontal, Layout, Zap, 
+            Target, ShoppingBag, ChevronLeft, ChevronRight, BarChart3
+        } = LucideIcons;
+
+        // --- Mock Data ---
+        const PLATFORMS = [
+            { id: 'xhs', name: '小红书', color: 'bg-red-500', icon: '📕' },
+            { id: 'weibo', name: '微博', color: 'bg-yellow-500', icon: '🪐' },
+            { id: 'wechat', name: '公众号', color: 'bg-green-600', icon: '🟢' },
+            { id: 'dewu', name: '得物', color: 'bg-black', icon: '👟' },
+        ];
+        const YEARLY_STATS = {
+            finance: { income: { main: 180000, side: 72000 }, expense: { fixed: 54000, variable: 24000 } },
+            time: { main: 1920, side: 650, rest: 2000 }
+        };
+        const INITIAL_FINANCE = {
+            budget: 20000, spent: 8500, income: { main: 15000, side: 6000 },
+            transactions: [
+                { id: 1, title: '主业工资', amount: 15000, type: 'income', category: 'main', date: '2026-01-05' },
+                { id: 2, title: '小红书广子', amount: 3000, type: 'income', category: 'side', date: '2026-01-10' },
+                { id: 3, title: '房租', amount: -4500, type: 'expense', category: 'fixed', date: '2026-01-01' },
+                { id: 4, title: '超市采购', amount: -600, type: 'expense', category: 'variable', date: '2026-01-12' },
+            ]
+        };
+        const INITIAL_TASKS = [
+            { id: 1, title: '完成Q1财务报表', type: 'main', duration: 120, completed: false, date: '2026-01-15' },
+            { id: 2, title: '拍摄得物球鞋开箱', type: 'side', duration: 90, completed: false, date: '2026-01-15' },
+            { id: 3, title: '公众号排版', type: 'side', duration: 60, completed: true, date: '2026-01-15' },
+        ];
+        const INITIAL_POSTS = [
+            { id: 1, title: '2026年年度计划模版分享', platform: 'xhs', status: 'posted', views: 12000, date: '2026-01-10' },
+            { id: 2, title: '如何平衡主业与副业？', platform: 'wechat', status: 'drafting', views: 0, date: '2026-01-20' },
+            { id: 3, title: '周末OOTD分享', platform: 'weibo', status: 'idea', views: 0, date: '2026-01-18' },
+        ];
+
+        // --- Helper Components ---
+        const Card = ({ children, className = "" }) => (
+            <div className={`bg-white rounded-2xl p-5 shadow-sm border border-slate-100 ${className}`}>{children}</div>
+        );
+
+        const ProgressBar = ({ current, total, colorClass = "bg-blue-600" }) => {
+            const percent = Math.min(100, Math.max(0, (current / total) * 100));
+            return (
+                <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                    <div className={`h-full ${colorClass} transition-all duration-500`} style={{ width: `${percent}%` }}></div>
+                </div>
+            );
+        };
+
+        const SimplePieChart = ({ data, size = 200 }) => {
+            const total = data.reduce((acc, item) => acc + item.value, 0);
+            let currentAngle = 0;
+            return (
+                <svg width={size} height={size} viewBox="-1 -1 2 2" style={{ transform: 'rotate(-90deg)' }}>
+                    {data.map((item, index) => {
+                        const sliceAngle = (item.value / total) * 2 * Math.PI;
+                        const x1 = Math.cos(currentAngle);
+                        const y1 = Math.sin(currentAngle);
+                        const x2 = Math.cos(currentAngle + sliceAngle);
+                        const y2 = Math.sin(currentAngle + sliceAngle);
+                        const largeArcFlag = sliceAngle > Math.PI ? 1 : 0;
+                        const pathData = `M 0 0 L ${x1} ${y1} A 1 1 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
+                        currentAngle += sliceAngle;
+                        return <path key={index} d={pathData} fill={item.color} stroke="white" strokeWidth="0.05" />;
+                    })}
+                </svg>
+            );
+        };
+
+        const CalendarView = ({ month = "2026-01", items, renderDayContent }) => {
+            const daysInMonth = 31; const startDayOfWeek = 4;
+            const days = Array.from({ length: 35 }, (_, i) => {
+                const dayNum = i - startDayOfWeek + 1;
+                return dayNum > 0 && dayNum <= daysInMonth ? dayNum : null;
+            });
+            return (
+                <div className="animate-fade-in">
+                    <div className="grid grid-cols-7 gap-1 mb-2 text-center text-xs text-slate-400 font-medium">
+                        {['日', '一', '二', '三', '四', '五', '六'].map(d => <div key={d}>{d}</div>)}
+                    </div>
+                    <div className="grid grid-cols-7 gap-2">
+                        {days.map((day, idx) => {
+                            if (!day) return <div key={idx} className="h-24 bg-transparent" />;
+                            const dateStr = `${month}-${day.toString().padStart(2, '0')}`;
+                            const dayItems = items.filter(item => item.date === dateStr);
+                            return (
+                                <div key={idx} className="h-24 bg-white border border-slate-100 rounded-lg p-1 relative flex flex-col group active:bg-slate-50 transition-colors overflow-hidden">
+                                    <span className={`text-xs font-bold mb-1 ${dayItems.length > 0 ? 'text-slate-800' : 'text-slate-300'}`}>{day}</span>
+                                    <div className="flex-1 overflow-y-auto space-y-1 custom-scrollbar">{renderDayContent(dayItems)}</div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        };
+
+        const ViewToggle = ({ current, onChange, options }) => (
+            <div className="flex bg-slate-100 p-1 rounded-lg mb-6 self-start">
+                {options.map(opt => (
+                    <button key={opt.id} onClick={() => onChange(opt.id)} className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${current === opt.id ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                        <span className="flex items-center gap-2">{opt.icon && <opt.icon size={12} />}{opt.label}</span>
+                    </button>
+                ))}
+            </div>
+        );
+
+        // --- Main App Logic ---
+        function LifeOS2026() {
+            const [activeTab, setActiveTab] = useState('dashboard');
+            const [finance, setFinance] = useState(INITIAL_FINANCE);
+            const [tasks, setTasks] = useState(INITIAL_TASKS);
+            const [posts, setPosts] = useState(INITIAL_POSTS);
+            
+            const [financeView, setFinanceView] = useState('overview');
+            const [timeView, setTimeView] = useState('overview');
+            const [socialView, setSocialView] = useState('board');
+            const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+            const [addType, setAddType] = useState('task'); 
+
+            const balance = useMemo(() => finance.income.main + finance.income.side - finance.spent, [finance]);
+
+            const timeDistribution = useMemo(() => {
+                const mainTime = tasks.filter(t => t.type === 'main').reduce((acc, curr) => acc + curr.duration, 0);
+                const sideTime = tasks.filter(t => t.type === 'side').reduce((acc, curr) => acc + curr.duration, 0);
+                const total = mainTime + sideTime;
+                return { main: mainTime, side: sideTime, total: total || 1 };
+            }, [tasks]);
+
+            const socialStats = useMemo(() => {
+                const counts = { idea: 0, drafting: 0, scheduled: 0, posted: 0 };
+                posts.forEach(p => counts[p.status]++);
+                return counts;
+            }, [posts]);
+
+            // --- Render Sections ---
+            const renderDashboard = () => (
+                <div className="space-y-6 animate-fade-in pb-20 md:pb-0">
+                    <div className="flex items-center justify-between">
+                        <div><h1 className="text-2xl font-bold text-slate-800">早安，主理人</h1><p className="text-slate-500">2026年1月15日 · 星期四</p></div>
+                        <button onClick={() => setIsAddModalOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white p-3 rounded-full shadow-lg transition-transform active:scale-95"><Plus size={24} /></button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <Card className="bg-gradient-to-br from-indigo-50 to-white">
+                            <div className="flex items-center gap-2 mb-2 text-indigo-900 font-medium"><Wallet size={18} /><span>本月结余</span></div>
+                            <div className="text-2xl font-bold text-indigo-600">¥{balance.toLocaleString()}</div>
+                            <div className="text-xs text-indigo-400 mt-1">预算剩余 ¥{(finance.budget - finance.spent).toLocaleString()}</div>
+                        </Card>
+                        <Card className="bg-gradient-to-br from-emerald-50 to-white">
+                            <div className="flex items-center gap-2 mb-2 text-emerald-900 font-medium"><Clock size={18} /><span>今日专注</span></div>
+                            <div className="text-2xl font-bold text-emerald-600">{Math.floor((timeDistribution.main + timeDistribution.side) / 60)}h {(timeDistribution.main + timeDistribution.side) % 60}m</div>
+                            <div className="text-xs text-emerald-400 mt-1">主业 {Math.round((timeDistribution.main/timeDistribution.total)*100)}% | 副业 {Math.round((timeDistribution.side/timeDistribution.total)*100)}%</div>
+                        </Card>
+                    </div>
+                    <Card>
+                        <div className="flex justify-between items-center mb-4"><h2 className="font-bold text-slate-800 flex items-center gap-2"><Target size={20} className="text-rose-500" />今日焦点</h2></div>
+                        <div className="space-y-3">
+                            {tasks.slice(0, 3).map(task => (
+                                <div key={task.id} className="flex items-center justify-between group">
+                                    <div className="flex items-center gap-3">
+                                        <button onClick={() => setTasks(tasks.map(t => t.id === task.id ? {...t, completed: !t.completed} : t))} className={`rounded-full w-5 h-5 border flex items-center justify-center transition-colors ${task.completed ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300'}`}>{task.completed && <CheckCircle2 size={12} className="text-white" />}</button>
+                                        <div className={task.completed ? 'line-through text-slate-400' : 'text-slate-700'}>{task.title}</div>
+                                    </div>
+                                    <span className={`text-xs px-2 py-0.5 rounded-full ${task.type === 'main' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>{task.type === 'main' ? '主业' : '副业'}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </Card>
+                </div>
+            );
+
+            const renderFinance = () => (
+                <div className="space-y-6 animate-fade-in pb-20 md:pb-0">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4"><h2 className="text-2xl font-bold text-slate-800">2026 财富管理</h2><ViewToggle current={financeView} onChange={setFinanceView} options={[{ id: 'overview', label: '概览', icon: Layout }, { id: 'calendar', label: '月历', icon: CalendarIcon }, { id: 'report', label: '年终汇总', icon: PieChartIcon }]} /></div>
+                    {financeView === 'overview' && (
+                        <>
+                            <Card className="bg-slate-900 text-white border-none">
+                                <div className="mb-4"><div className="text-slate-400 text-sm mb-1">总资产净值</div><div className="text-3xl font-bold">¥{(150000 + balance).toLocaleString()}</div></div>
+                                <div className="space-y-3">
+                                    <div><div className="flex justify-between text-xs mb-1 text-slate-300"><span>必须开支 (Needs) - 50%</span><span>¥{Math.abs(finance.transactions.filter(t => t.category === 'fixed' || t.category === 'variable').reduce((a,b)=>a+b.amount,0)).toLocaleString()}</span></div><ProgressBar current={55} total={100} colorClass="bg-rose-500" /></div>
+                                    <div><div className="flex justify-between text-xs mb-1 text-slate-300"><span>愿望消费 (Wants) - 30%</span><span>¥850</span></div><ProgressBar current={10} total={100} colorClass="bg-yellow-500" /></div>
+                                </div>
+                            </Card>
+                            <div className="grid grid-cols-2 gap-4">
+                                <Card className="border-l-4 border-l-blue-500"><div className="text-slate-500 text-xs mb-1">主业收入</div><div className="font-bold text-lg">¥{finance.income.main.toLocaleString()}</div></Card>
+                                <Card className="border-l-4 border-l-purple-500"><div className="text-slate-500 text-xs mb-1">副业/被动收入</div><div className="font-bold text-lg">¥{finance.income.side.toLocaleString()}</div></Card>
+                            </div>
+                        </>
+                    )}
+                    {financeView === 'calendar' && <Card><div className="mb-4 flex justify-between items-center"><h3 className="font-bold text-slate-700">2026年1月 财务日历</h3></div><CalendarView items={finance.transactions} renderDayContent={(items) => items.map((item, i) => <div key={i} className={`text-[10px] truncate px-1 rounded ${item.type === 'income' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>{item.type === 'income' ? '+' : ''}{item.amount}</div>)} /></Card>}
+                    {financeView === 'report' && <div className="space-y-4"><Card className="flex flex-col items-center py-8"><h3 className="font-bold text-slate-700 mb-6">2026 年度收支概览</h3><div className="flex flex-col md:flex-row items-center gap-12"><div className="text-center"><SimplePieChart data={[{ value: YEARLY_STATS.finance.income.main, color: '#3b82f6' }, { value: YEARLY_STATS.finance.income.side, color: '#a855f7' }]} /><div className="mt-4 text-sm font-bold text-slate-700">收入构成</div></div><div className="text-center"><SimplePieChart data={[{ value: YEARLY_STATS.finance.expense.fixed, color: '#f43f5e' }, { value: YEARLY_STATS.finance.expense.variable, color: '#eab308' }, { value: 100000, color: '#10b981' }]} /><div className="mt-4 text-sm font-bold text-slate-700">支出与储蓄</div></div></div></Card></div>}
+                </div>
+            );
+
+            const renderTime = () => (
+                <div className="space-y-6 animate-fade-in pb-20 md:pb-0">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4"><h2 className="text-2xl font-bold text-slate-800">时间分配</h2><ViewToggle current={timeView} onChange={setTimeView} options={[{ id: 'overview', label: '今日', icon: Layout }, { id: 'calendar', label: '月历', icon: CalendarIcon }, { id: 'report', label: '年度', icon: PieChartIcon }]} /></div>
+                    {timeView === 'overview' && (
+                        <>
+                            <Card className="flex flex-col items-center justify-center py-8"><div className="relative w-48 h-48 rounded-full border-8 border-slate-100 flex items-center justify-center"><div className="absolute inset-0 rounded-full opacity-20" style={{ background: `conic-gradient(#3b82f6 0% ${ (timeDistribution.main/timeDistribution.total)*100 }%, #a855f7 ${ (timeDistribution.main/timeDistribution.total)*100 }% 100%)` }}></div><div className="text-center z-10"><div className="text-3xl font-bold text-slate-800">{Math.floor(timeDistribution.total / 60)}h</div><div className="text-xs text-slate-400">今日总工时</div></div></div><div className="flex gap-8 mt-6"><div className="text-center"><div className="flex items-center gap-2 text-blue-600 font-bold"><div className="w-3 h-3 rounded-full bg-blue-500"></div> 主业</div><div className="text-sm text-slate-500">{Math.floor(timeDistribution.main/60)}h {timeDistribution.main%60}m</div></div><div className="text-center"><div className="flex items-center gap-2 text-purple-600 font-bold"><div className="w-3 h-3 rounded-full bg-purple-500"></div> 副业</div><div className="text-sm text-slate-500">{Math.floor(timeDistribution.side/60)}h {timeDistribution.side%60}m</div></div></div></Card>
+                            <div><h3 className="font-bold text-slate-700 mb-3">今日时间轴</h3><div className="space-y-3 pl-4 border-l-2 border-slate-100 relative">{tasks.sort((a,b) => a.type === 'main' ? -1 : 1).map((task) => (<div key={task.id} className="relative"><div className={`absolute -left-[21px] top-3 w-4 h-4 rounded-full border-2 border-white shadow-sm ${task.type === 'main' ? 'bg-blue-500' : 'bg-purple-500'}`}></div><Card className="p-3 !py-3"><div className="flex justify-between items-start"><div><span className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-bold tracking-wider ${task.type === 'main' ? 'text-blue-500 bg-blue-50' : 'text-purple-500 bg-purple-50'}`}>{task.type === 'main' ? 'Main' : 'Side'}</span><h4 className="font-bold text-slate-700 mt-1">{task.title}</h4></div><div className="text-xs font-bold text-slate-400 flex items-center gap-1"><Clock size={12}/> {task.duration} min</div></div></Card></div>))}</div></div>
+                        </>
+                    )}
+                    {timeView === 'calendar' && <Card><div className="mb-4 flex justify-between items-center"><h3 className="font-bold text-slate-700">2026年1月 精力分布</h3><div className="flex gap-2 text-[10px]"><span className="flex items-center gap-1"><div className="w-2 h-2 bg-blue-500 rounded-full"></div>主业</span><span className="flex items-center gap-1"><div className="w-2 h-2 bg-purple-500 rounded-full"></div>副业</span></div></div><CalendarView items={tasks} renderDayContent={(items) => <div className="flex flex-col gap-1 mt-1">{items.map((item, i) => <div key={i} className={`h-1.5 rounded-full w-full ${item.type === 'main' ? 'bg-blue-400' : 'bg-purple-400'}`}></div>)}</div>} /></Card>}
+                    {timeView === 'report' && <Card className="flex flex-col items-center py-10"><h3 className="font-bold text-slate-700 mb-8">2026 年度精力分配</h3><SimplePieChart size={240} data={[{ value: YEARLY_STATS.time.main, color: '#3b82f6' }, { value: YEARLY_STATS.time.side, color: '#a855f7' }]} /></Card>}
+                </div>
+            );
+
+            // --- Render Social ---
+            const renderSocial = () => (
+                <div className="space-y-6 animate-fade-in h-full flex flex-col pb-20 md:pb-0">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4"><h2 className="text-2xl font-bold text-slate-800">全域内容矩阵</h2><ViewToggle current={socialView} onChange={setSocialView} options={[{ id: 'board', label: '看板', icon: Layout }, { id: 'calendar', label: '日历', icon: CalendarIcon }]} /></div>
+                    {socialView === 'board' && (
+                        <>
+                            <div className="flex gap-3 overflow-x-auto pb-2">{PLATFORMS.map(p => (<div key={p.id} className="flex flex-col items-center gap-1 cursor-pointer min-w-[60px]"><div className={`w-12 h-12 rounded-full ${p.color} flex items-center justify-center text-xl shadow-md text-white`}>{p.icon}</div><span className="text-xs text-slate-600">{p.name}</span></div>))}</div>
+                            <div className="flex-1 overflow-x-auto"><div className="flex gap-4 min-w-[800px] h-full">{['idea', 'drafting', 'scheduled', 'posted'].map(status => (<div key={status} className="w-64 flex flex-col"><div className="flex items-center justify-between mb-3 px-1"><h3 className="font-bold text-slate-600 uppercase text-xs tracking-wider">{status}</h3><span className="bg-slate-200 text-slate-600 text-[10px] px-1.5 rounded-full">{posts.filter(p => p.status === status).length}</span></div><div className="flex-1 bg-slate-50/50 rounded-xl p-2 space-y-2 border border-slate-100">{posts.filter(p => p.status === status).map(post => { const platform = PLATFORMS.find(pl => pl.id === post.platform); return (<div key={post.id} className="bg-white p-3 rounded-lg shadow-sm border border-slate-100 cursor-move hover:shadow-md transition-shadow"><div className="flex justify-between items-start mb-2"><span className={`text-[10px] px-1.5 py-0.5 rounded text-white ${platform.color}`}>{platform.name}</span><MoreHorizontal size={14} className="text-slate-300"/></div><p className="text-sm font-medium text-slate-800 mb-2">{post.title}</p>{status === 'posted' && <div className="text-xs text-slate-400 flex items-center gap-1"><Zap size={12} className="text-yellow-500"/> {post.views.toLocaleString()} 阅读</div>}{status !== 'posted' && (<div className="flex justify-end mt-2"><button onClick={() => { const nextStatus = status === 'idea' ? 'drafting' : status === 'drafting' ? 'scheduled' : 'posted'; const newPosts = posts.map(p => p.id === post.id ? {...p, status: nextStatus} : p); setPosts(newPosts); }} className="text-[10px] text-indigo-600 font-medium hover:underline">推进 &rarr;</button></div>)}</div>) })}<button onClick={() => { setAddType('post'); setIsAddModalOpen(true); }} className="w-full py-2 border border-dashed border-slate-300 rounded-lg text-slate-400 text-xs hover:bg-slate-50 hover:text-slate-600 transition-colors">+ 新建内容</button></div></div>))}</div></div>
+                        </>
+                    )}
+                    {socialView === 'calendar' && <Card className="h-full"><div className="mb-4"><h3 className="font-bold text-slate-700">内容发布排期</h3></div><CalendarView items={posts} renderDayContent={(items) => items.map((item, i) => { const platform = PLATFORMS.find(pl => pl.id === item.platform); return <div key={i} className={`text-[10px] truncate px-1 rounded mb-1 text-white ${platform.color}`}>{platform.icon} {item.title}</div> })} /></Card>}
+                </div>
+            );
+
+            // --- Add Modal ---
+            const AddModal = () => (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+                    <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl animate-in slide-in-from-bottom-10">
+                        <h3 className="text-xl font-bold mb-4">{addType === 'task' ? '添加新任务' : addType === 'transaction' ? '记一笔' : '新内容灵感'}</h3>
+                        <div className="space-y-4">
+                            <div><label className="block text-sm font-medium text-slate-600 mb-1">标题</label><input type="text" className="w-full border border-slate-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-indigo-500" placeholder="请输入..." autoFocus /></div>
+                            {addType === 'task' && <div className="flex gap-4"><div className="flex-1"><label className="block text-sm font-medium text-slate-600 mb-1">类型</label><select className="w-full border border-slate-200 rounded-lg p-3 bg-white"><option value="main">主业</option><option value="side">副业</option></select></div><div className="flex-1"><label className="block text-sm font-medium text-slate-600 mb-1">耗时(分)</label><input type="number" className="w-full border border-slate-200 rounded-lg p-3" defaultValue={30}/></div></div>}
+                            {addType === 'transaction' && <div className="flex gap-4"><div className="flex-1"><label className="block text-sm font-medium text-slate-600 mb-1">金额</label><input type="number" className="w-full border border-slate-200 rounded-lg p-3" placeholder="0.00"/></div><div className="flex-1"><label className="block text-sm font-medium text-slate-600 mb-1">类型</label><select className="w-full border border-slate-200 rounded-lg p-3 bg-white"><option value="expense">支出</option><option value="income">收入</option></select></div></div>}
+                            {addType === 'post' && <div><label className="block text-sm font-medium text-slate-600 mb-1">发布平台</label><div className="flex gap-2">{PLATFORMS.map(p => (<button key={p.id} className={`flex-1 py-2 rounded-lg text-sm border ${p.color.replace('bg-', 'border-').replace('-500','-200').replace('-600','-200')} hover:bg-slate-50`}>{p.name}</button>))}</div></div>}
+                            <button onClick={() => setIsAddModalOpen(false)} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-indigo-700 active:scale-95 transition-all mt-4">确认添加</button>
+                            <button onClick={() => setIsAddModalOpen(false)} className="w-full text-slate-500 py-2 text-sm hover:text-slate-800">取消</button>
+                        </div>
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="flex h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden">
+                    <div className="hidden md:flex flex-col w-64 bg-white border-r border-slate-200 p-6 justify-between">
+                        <div><div className="flex items-center gap-3 mb-10 text-indigo-600"><Layout size={28} /><span className="text-xl font-black tracking-tight">2026 LifeOS</span></div><nav className="space-y-2">{[{ id: 'dashboard', label: '总览 Dashboard', icon: Layout }, { id: 'finance', label: '财务 & 预算', icon: Wallet }, { id: 'time', label: '时间 & 效率', icon: Clock }, { id: 'social', label: '社媒 & 内容', icon: Smartphone }].map(item => (<button key={item.id} onClick={() => setActiveTab(item.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === item.id ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}><item.icon size={20} />{item.label}</button>))}</nav></div><div className="bg-slate-900 text-slate-300 rounded-xl p-4 text-xs"><div className="font-bold text-white mb-2">💡 2026 核心目标</div><ul className="list-disc list-inside space-y-1"><li>主业升职加薪</li><li>副业月入过万</li><li>存款达到 20W</li></ul></div></div>
+                    <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+                        <div className="md:hidden h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4"><span className="font-bold text-lg">2026 LifeOS</span><button onClick={() => setIsAddModalOpen(true)}><Plus /></button></div>
+                        <main className="flex-1 overflow-y-auto p-4 md:p-8"><div className="max-w-5xl mx-auto h-full pb-20 md:pb-0">{activeTab === 'dashboard' && renderDashboard()}{activeTab === 'finance' && renderFinance()}{activeTab === 'time' && renderTime()}{activeTab === 'social' && renderSocial()}</div></main>
+                        <div className="md:hidden bg-white border-t border-slate-200 flex justify-around p-3 pb-safe absolute bottom-0 w-full z-10">{[{ id: 'dashboard', icon: Layout }, { id: 'finance', icon: Wallet }, { id: 'time', icon: Clock }, { id: 'social', icon: Smartphone }].map(item => (<button key={item.id} onClick={() => setActiveTab(item.id)} className={`p-2 rounded-xl transition-colors ${activeTab === item.id ? 'text-indigo-600 bg-indigo-50' : 'text-slate-400'}`}><item.icon size={24} /></button>))}</div>
+                    </div>
+                    {isAddModalOpen && <AddModal />}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<LifeOS2026 />);
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW fail', err));
+            });
+        }
+    </script>
+</body>
+</html>
